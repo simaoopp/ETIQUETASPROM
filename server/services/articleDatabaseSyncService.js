@@ -348,7 +348,14 @@ export async function processArticleDatabaseSyncBatch({
 
   const receivedRows = (Array.isArray(rows) ? rows : [])
     .map(normalizeRow)
-    .filter((row) => row.artigo);
+    // Regra de negócio: só sincronizar artigos com PVP2 não nulo.
+    // PVP2 = 0 continua válido; apenas null/undefined são excluídos.
+    .filter(
+      (row) =>
+        row.artigo &&
+        row.pvp2 !== null &&
+        row.pvp2 !== undefined,
+    );
 
   // Large commercial exports can contain the same article more than once.
   // A duplicate inside the same HTTP batch can otherwise produce:

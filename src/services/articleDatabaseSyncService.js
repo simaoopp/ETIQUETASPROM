@@ -88,7 +88,16 @@ function buildNormalizedRow(values, columns) {
   if (pvp1 !== undefined) row.pvp1 = normalizePrice(pvp1);
 
   const pvp2 = read("pvp2");
-  if (pvp2 !== undefined) row.pvp2 = normalizePrice(pvp2);
+  const normalizedPvp2 =
+    pvp2 !== undefined ? normalizePrice(pvp2) : "";
+
+  // Regra de importação: só entram artigos com PVP2 preenchido.
+  // Se PVP2 estiver vazio/nulo, ignora-se a linha completa.
+  if (!normalizedPvp2) {
+    return null;
+  }
+
+  row.pvp2 = normalizedPvp2;
 
   const pvp3 = read("pvp3");
   if (pvp3 !== undefined) row.pvp3 = normalizePrice(pvp3);
@@ -526,6 +535,12 @@ async function scanOdsArticles(
           );
         }
 
+        if (columns.pvp2 < 0) {
+          throw new Error(
+            "Não encontrei a coluna PVP2. Esta atualização só importa artigos com PVP2 preenchido.",
+          );
+        }
+
         headerFound = true;
         onHeader?.({
           sourceColumns: sourceColumns.filter(Boolean),
@@ -720,6 +735,12 @@ async function parseWorkbookFile(file, { onProgress } = {}) {
   if (relativeColumns.artigo < 0) {
     throw new Error(
       "Não encontrei a coluna Artigo. Usa uma coluna Artigo, Código ou Nosso Código.",
+    );
+  }
+
+  if (relativeColumns.pvp2 < 0) {
+    throw new Error(
+      "Não encontrei a coluna PVP2. Esta atualização só importa artigos com PVP2 preenchido.",
     );
   }
 
