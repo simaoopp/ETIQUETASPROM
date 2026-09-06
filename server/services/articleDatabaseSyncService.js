@@ -27,21 +27,64 @@ function normalizePrice(value) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+function hasOwn(input, ...keys) {
+  return keys.some((key) =>
+    Object.prototype.hasOwnProperty.call(input || {}, key),
+  );
+}
+
 function normalizeRow(input = {}) {
   const artigo = text(input.artigo || input.Artigo);
 
-  return {
-    artigo,
-    descricao: text(input.descricao || input.Descricao),
-    pvp1: text(input.pvp1 ?? input.PVP1),
-    pvp2: normalizePrice(input.pvp2 ?? input.PVP2),
-    pvp3: text(input.pvp3 ?? input.PVP3),
-    estado: text(input.estado ?? input.Estado),
-  };
+  const row = { artigo };
+
+  if (hasOwn(input, "descricao", "Descricao", "Descrição")) {
+    row.descricao = text(
+      input.descricao ?? input.Descricao ?? input["Descrição"],
+    );
+  }
+
+  if (hasOwn(input, "pvp1", "PVP1")) {
+    row.pvp1 = text(input.pvp1 ?? input.PVP1);
+  }
+
+  if (hasOwn(input, "pvp2", "PVP2")) {
+    row.pvp2 = normalizePrice(input.pvp2 ?? input.PVP2);
+  }
+
+  if (hasOwn(input, "pvp3", "PVP3")) {
+    row.pvp3 = text(input.pvp3 ?? input.PVP3);
+  }
+
+  if (hasOwn(input, "estado", "Estado")) {
+    row.estado = text(input.estado ?? input.Estado);
+  }
+
+  if (
+    hasOwn(
+      input,
+      "codigoBarras",
+      "codigo_barras",
+      "Cód. Barras",
+      "EAN",
+    )
+  ) {
+    row.codigoBarras = text(
+      input.codigoBarras ??
+      input.codigo_barras ??
+      input["Cód. Barras"] ??
+      input.EAN,
+    );
+  }
+
+  return row;
 }
 
 function buildSearchTerms(row) {
-  return [row.artigo, row.descricao].filter(Boolean).join(" ").toLowerCase();
+  return [row.artigo, row.descricao, row.codigoBarras]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 }
 
 function samePrice(a, b) {
@@ -62,10 +105,33 @@ function samePrice(a, b) {
 function getChangedFields(next, current) {
   const changes = {};
 
-  if (text(current.pvp1) !== next.pvp1) changes.pvp1 = true;
-  if (!samePrice(current.pvp2, next.pvp2)) changes.pvp2 = true;
-  if (text(current.pvp3) !== next.pvp3) changes.pvp3 = true;
-  if (text(current.estado) !== next.estado) changes.estado = true;
+  if (
+    next.pvp1 !== undefined &&
+    text(current.pvp1) !== next.pvp1
+  ) {
+    changes.pvp1 = true;
+  }
+
+  if (
+    next.pvp2 !== undefined &&
+    !samePrice(current.pvp2, next.pvp2)
+  ) {
+    changes.pvp2 = true;
+  }
+
+  if (
+    next.pvp3 !== undefined &&
+    text(current.pvp3) !== next.pvp3
+  ) {
+    changes.pvp3 = true;
+  }
+
+  if (
+    next.estado !== undefined &&
+    text(current.estado) !== next.estado
+  ) {
+    changes.estado = true;
+  }
 
   return changes;
 }
@@ -374,23 +440,25 @@ export async function processArticleDatabaseSyncBatch({
         changedFields[field] += 1;
       }
 
-      updates.push({
+      const update = {
         artigo: row.artigo,
-        pvp1: row.pvp1,
-        pvp2: row.pvp2,
-        pvp3: row.pvp3,
-        estado: row.estado,
-      });
+      };
+
+      for (const field of Object.keys(changes)) {
+        update[field] = row[field];
+      }
+
+      updates.push(update);
     } else {
       inserts.push({
         artigo: row.artigo,
-        descricao: row.descricao,
-        pvp1: row.pvp1,
-        pvp2: row.pvp2,
-        pvp3: row.pvp3,
-        estado: row.estado,
+        descricao: row.descricao ?? "",
+        pvp1: row.pvp1 ?? "",
+        pvp2: row.pvp2 ?? null,
+        pvp3: row.pvp3 ?? "",
+        estado: row.estado ?? "",
         organization_id: log.organization_id,
-        codigo_barras: "",
+        codigo_barras: row.codigoBarras ?? "",
         search_terms: buildSearchTerms(row),
       });
     }

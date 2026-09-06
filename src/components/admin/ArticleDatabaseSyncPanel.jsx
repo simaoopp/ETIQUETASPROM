@@ -83,7 +83,7 @@ export default function ArticleDatabaseSyncPanel({
         onProgress: ({ phase, percent, processed, total, unique }) => {
           if (phase === "reading") {
             setProgress(1);
-            setProgressDetail("A carregar o ficheiro para memória…");
+            setProgressDetail("A preparar leitura segura do ficheiro…");
             return;
           }
 
@@ -99,7 +99,7 @@ export default function ArticleDatabaseSyncPanel({
       setParsed(data);
       setProgress(100);
       setProgressDetail(
-        `${formatNumber(data.rows.length)} artigos únicos preparados`,
+        `${formatNumber(data.articleCount)} artigos únicos preparados`,
       );
 
       const duplicateText = data.duplicatesRemoved
@@ -107,7 +107,7 @@ export default function ArticleDatabaseSyncPanel({
         : "";
 
       setMessage(
-        `${formatNumber(data.rows.length)} artigos preparados para sincronização${duplicateText}.`,
+        `${formatNumber(data.articleCount)} artigos preparados para sincronização${duplicateText}.`,
       );
     } catch (parseError) {
       setFile(null);
@@ -129,7 +129,7 @@ export default function ArticleDatabaseSyncPanel({
     if (!confirming) {
       setConfirming(true);
       setMessage(
-        `Confirma a atualização de ${formatNumber(parsed.rows.length)} artigos. Os existentes só terão PVP1, PVP2, PVP3 e estado alterados.`,
+        `Confirma a atualização de ${formatNumber(parsed.articleCount)} artigos únicos. Só são alterados os campos presentes no ficheiro; descrições e dados ricos existentes são preservados.`,
       );
       return;
     }
@@ -140,7 +140,7 @@ export default function ArticleDatabaseSyncPanel({
     setMessage("A sincronizar a base de dados…");
     setProgress(0);
     setProgressDetail(
-      `0 / ${formatNumber(parsed.rows.length)} artigos`,
+      `0 / ${formatNumber(parsed.validRows || parsed.articleCount)} artigos`,
     );
 
     try {
@@ -279,7 +279,7 @@ export default function ArticleDatabaseSyncPanel({
           <div className="admin-db-summary">
             <div>
               <span>Artigos</span>
-              <strong>{formatNumber(parsed.rows.length)}</strong>
+              <strong>{formatNumber(parsed.articleCount)}</strong>
             </div>
             <div>
               <span>Folha</span>
@@ -288,6 +288,12 @@ export default function ArticleDatabaseSyncPanel({
             <div>
               <span>Duplicados</span>
               <strong>{formatNumber(parsed.duplicatesRemoved)}</strong>
+            </div>
+            <div>
+              <span>Processamento</span>
+              <strong>
+                {parsed.mode === "streaming-ods" ? "Modo seguro" : "Normal"}
+              </strong>
             </div>
           </div>
         )}
