@@ -131,8 +131,40 @@ function retryDelayMs(attempt, retryAfterSeconds = 0) {
   return Math.min(exponential + jitter, 20_000);
 }
 
-function shouldRetryStatus(status) {
-  return [408, 425, 429, 500, 502, 503, 504].includes(Number(status));
+function shouldRetryResponse(status, code = "") {
+  const numericStatus = Number(status);
+  const normalizedCode = String(code || "").toUpperCase();
+
+  if ([408, 425, 429, 502, 503, 504].includes(numericStatus)) {
+    return true;
+  }
+
+  if (numericStatus !== 500) {
+    return false;
+  }
+
+  // PostgreSQL/Supabase deterministic data errors will not heal by retrying.
+  if (
+    [
+      "23505", // unique_violation
+      "21000", // cardinality_violation / same ON CONFLICT row twice
+      "23502", // not_null_violation
+      "23503", // foreign_key_violation
+      "22P02", // invalid_text_representation
+      "42703", // undefined_column
+      "42P01", // undefined_table
+    ].includes(normalizedCode)
+  ) {
+    return false;
+  }
+
+  // Timeouts and generic infrastructure 500s are retryable.
+  return (
+    normalizedCode === "57014" ||
+    normalizedCode === "INTERNAL_ERROR" ||
+    normalizedCode === "" ||
+    normalizedCode.startsWith("PGRST")
+  );
 }
 
 async function api(path, options = {}, { maxRetries = 0, onRetry } = {}) {
@@ -191,7 +223,7 @@ async function api(path, options = {}, { maxRetries = 0, onRetry } = {}) {
       code: data?.error?.code || "",
     });
 
-    if (!shouldRetryStatus(response.status) || attempt >= maxRetries) {
+    if (!shouldRetryResponse(response.status, error.code) || attempt >= maxRetries) {
       throw error;
     }
 

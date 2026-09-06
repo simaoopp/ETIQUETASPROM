@@ -346,9 +346,27 @@ export async function processArticleDatabaseSyncBatch({
 }) {
   const client = requireClient();
 
-  const normalizedRows = (Array.isArray(rows) ? rows : [])
+  const receivedRows = (Array.isArray(rows) ? rows : [])
     .map(normalizeRow)
     .filter((row) => row.artigo);
+
+  // Large commercial exports can contain the same article more than once.
+  // A duplicate inside the same HTTP batch can otherwise produce:
+  // - 23505 duplicate key on INSERT; or
+  // - 21000 ON CONFLICT cannot affect row a second time on UPSERT.
+  //
+  // Keep only the last occurrence in the batch, matching the updater's
+  // historical "last occurrence wins" behaviour.
+  const rowsByArticle = new Map();
+  for (const row of receivedRows) {
+    rowsByArticle.set(row.artigo, row);
+  }
+
+  const normalizedRows = [...rowsByArticle.values()];
+  const duplicateRowsInBatch = Math.max(
+    0,
+    receivedRows.length - normalizedRows.length,
+  );
 
   const safeBatchIndex = Number(batchIndex);
 
@@ -360,10 +378,10 @@ export async function processArticleDatabaseSyncBatch({
     throw new AppError("VALIDATION_ERROR", "Índice do lote inválido.");
   }
 
-  if (normalizedRows.length > MAX_BATCH_SIZE) {
+  if (receivedRows.length > MAX_BATCH_SIZE) {
     throw new AppError(
       "VALIDATION_ERROR",
-      `O lote não pode ultrapassar ${MAX_BATCH_SIZE} artigos.`,
+      `O lote não pode ultrapassar ${MAX_BATCH_SIZE} linhas de artigos.`,
     );
   }
 
@@ -394,6 +412,7 @@ export async function processArticleDatabaseSyncBatch({
     return {
       duplicate: true,
       processed: 0,
+      duplicateRowsInBatch: 0,
       updated: 0,
       inserted: 0,
       unchanged: 0,
@@ -473,7 +492,7 @@ export async function processArticleDatabaseSyncBatch({
   }
 
   const nextTotals = {
-    processed_rows: Number(log.processed_rows || 0) + normalizedRows.length,
+    processed_rows: Number(log.processed_rows || 0) + receivedRows.length,
     updated_rows: Number(log.updated_rows || 0) + updates.length,
     inserted_rows: Number(log.inserted_rows || 0) + inserts.length,
     unchanged_rows: Number(log.unchanged_rows || 0) + unchanged,
@@ -510,7 +529,9 @@ export async function processArticleDatabaseSyncBatch({
 
   return {
     duplicate: false,
-    processed: normalizedRows.length,
+    processed: receivedRows.length,
+    duplicateRowsInBatch,
+    uniqueRowsInBatch: normalizedRows.length,
     updated: updates.length,
     inserted: inserts.length,
     unchanged,
