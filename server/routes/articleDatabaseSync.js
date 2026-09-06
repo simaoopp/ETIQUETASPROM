@@ -48,6 +48,7 @@ export function registerArticleDatabaseSyncRoutes(app, { requireAuth, attachTena
       const result = await processArticleDatabaseSyncBatch({
         req,
         syncId: req.body?.syncId,
+        batchIndex: req.body?.batchIndex,
         rows: req.body?.rows,
       });
       return res.json({ ok: true, ...result });

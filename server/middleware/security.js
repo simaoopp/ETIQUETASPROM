@@ -142,7 +142,7 @@ export const adminActionRateLimit = createRateLimit({
 export const articleDatabaseSyncRateLimit = createRateLimit({
   label: "article-db-sync",
   windowMs: readNumber("ARTICLE_DB_SYNC_RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000),
-  // 1200 pedidos/15min permite ~120 mil artigos com batches de 100,
-  // sem remover proteção contra abuso.
-  max: readNumber("ARTICLE_DB_SYNC_RATE_LIMIT_MAX", 1200),
+  // 300.000 artigos / 250 por batch = ~1.200 pedidos.
+  // 5.000/15min deixa margem para retries sem retirar a proteção owner-only.
+  max: readNumber("ARTICLE_DB_SYNC_RATE_LIMIT_MAX", 5000),
 });
