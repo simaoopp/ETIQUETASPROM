@@ -466,21 +466,42 @@ export async function processArticleDatabaseSyncBatch({
         changedFields[field] += 1;
       }
 
-      const update = {
+      // Supabase/PostgREST bulk upsert builds one column-set for the whole
+      // payload. If some rows contain pvp1/pvp3 and others omit them, omitted
+      // keys can become NULL for those rows before ON CONFLICT is evaluated.
+      // Since pvp1/pvp3/estado are NOT NULL in the live schema, every update
+      // payload must therefore contain a complete price/status snapshot.
+      //
+      // We still preserve the database value when the import did not provide
+      // that field, so only intended changes are applied.
+      updates.push({
         artigo: row.artigo,
-      };
-
-      for (const field of Object.keys(changes)) {
-        update[field] = row[field];
-      }
-
-      updates.push(update);
+        pvp1:
+          row.pvp1 !== undefined
+            ? row.pvp1
+            : text(current.pvp1),
+        pvp2:
+          row.pvp2 !== undefined
+            ? row.pvp2
+            : current.pvp2,
+        pvp3:
+          row.pvp3 !== undefined
+            ? row.pvp3
+            : text(current.pvp3),
+        estado:
+          row.estado !== undefined
+            ? row.estado
+            : text(current.estado),
+      });
     } else {
+      // New rows receive explicit values for every article field that is
+      // NOT NULL in the canonical schema. Rich fields not listed here keep
+      // their database defaults.
       inserts.push({
         artigo: row.artigo,
         descricao: row.descricao ?? "",
         pvp1: row.pvp1 ?? "",
-        pvp2: row.pvp2 ?? null,
+        pvp2: row.pvp2,
         pvp3: row.pvp3 ?? "",
         estado: row.estado ?? "",
         organization_id: log.organization_id,
